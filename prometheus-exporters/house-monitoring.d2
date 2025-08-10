@@ -1,0 +1,65 @@
+# House Monitoring Architecture
+
+direction: right
+
+
+
+  awair1: Awair Office {
+    shape: rectangle
+    style.fill: "#FFD23F"
+  }
+
+  awair2: Awair Bedroom {
+    shape: rectangle
+    style.fill: "#FFD23F"
+  }
+
+  ecowitt: Ecowitt Weather {
+    shape: rectangle
+    style.fill: "#87CEEB"
+  }
+
+  fronius: Fronius Solar {
+    shape: rectangle
+    style.fill: "#FFA500"
+  }
+
+  daikin: Daikin AC {
+    shape: rectangle
+    style.fill: "#B0E0E6"
+  }
+
+
+exporter: Go Exporter {
+  shape: rectangle
+  style: {
+    fill: "#00ADD8"
+    stroke: "#005A9C"
+    font-size: 20
+  }
+
+}
+
+prometheus: Prometheus {
+  shape: cylinder
+  style: {
+    fill: "#E6522C"
+    stroke: "#CF3A0C"
+    font-size: 20
+  }
+}
+
+
+# Connections
+awair1 -> exporter: "GET /air-data/latest\n(JSON)"
+awair2 -> exporter: "GET /air-data/latest\n(JSON)"
+ecowitt -> exporter: "GET /get_livedata_info\n(JSON)"
+fronius -> exporter: "GET /solar_api/v1\n(JSON)"
+daikin -> exporter: "GET /skyfi/aircon\n(CSV)"
+
+exporter -> prometheus: "Exposes :8080/metrics\n(Prometheus format)" {
+  style: {
+    stroke: "#E6522C"
+    stroke-width: 3
+  }
+}

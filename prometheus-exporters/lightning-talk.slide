@@ -1,11 +1,9 @@
 # How to Monitor your House with a Prometheus Exporter in Go
 
 21 Aug 2025
-Summary: Cool things
+
 
 Karl Cordes
-
-
 karl@cordes.com.au
 
 -----
@@ -35,35 +33,43 @@ I want to monitor:
 - Solar panels (Fronius)
 - Weather station (Ecowitt)
 
+They all have their own mobile apps and hosted services.
+
+
+Something running locally is better and faster.
+
 **Solution**: Write a custom Prometheus exporter!
 
 -----
 
 ## What's a Prometheus Exporter?
 
-.image prometheus-flow.png
-
-A bridge that:
+A program that:
 - Collects metrics from a source
 - Translates to Prometheus format
 - Serves them on `/metrics` endpoint
 
 -----
 
+## House Monitoring Architecture
+
+.image house-monitoring.png _ 1000
+
+One Go binary polling all devices and exporting metrics on /metrics
+
+-----
+
 ## Why Go? 🚀
 
 ```bash
-$ ls -la cpu-exporter
--rwxr-xr-x  1 karl  staff  7.2M  cpu-exporter
-
-$ scp cpu-exporter server:/usr/local/bin/
-$ ssh server 'cpu-exporter &'
+ cat deploy.sh
+ #!/bin/bash
+ GOOS=linux GOARCH=amd64 go build -o house cmd/main.go
+ rsync -avz house k@server:~/bin/
+ ssh k@server -t 'sudo systemctl restart house.service'
 ```
 
-✅ Single binary - no dependencies
-✅ Fast and lightweight  
-✅ Concurrent by design
-✅ Amazing Prometheus library
+Single binary - no runtime dependencies ❤️
 
 -----
 
@@ -254,32 +260,57 @@ func GetMetrics(m Metrics) {
 
 -----
 
+## Weather Station
+
+```go
+// house/ecowitt/ecowitt.go - Weather station with many sensors
+func GetMetrics(m Metrics) {
+    for {
+        data, _ := GetLiveData()  // JSON from weather station
+        
+        // Indoor sensor
+        for _, unit := range data.WH25 {
+            temp, _ := strconv.ParseFloat(unit.Temp, 64)
+            m.Temp.With(prometheus.Labels{"location": "office"}).Set(temp)
+        }
+        
+        // Multiple outdoor sensors with names!
+        for _, ch := range data.ChAisle {
+            temp, _ := TempToFloat64(ch.Temp)
+            humidity, _ := HumidityToFloat64(ch.Humidity)
+            
+            m.Temp.With(prometheus.Labels{"location": ch.Name}).Set(temp)
+            m.Humidity.With(prometheus.Labels{"location": ch.Name}).Set(humidity)
+            
+            // Calculate dew point from temp & humidity
+            dewpoint, _ := DewPoint(temp, humidity)
+            m.DewPoint.With(prometheus.Labels{"location": ch.Name}).Set(dewpoint)
+        }
+        
+        time.Sleep(1 * time.Minute)
+    }
+}
+```
+
+-----
+
 ## A single pane of glass
 
-**My house runs this 24/7:**
 - Air quality
 - Solar panel production
 - Air conditioner status
 - Weather station data
 
-**One Go binary monitors it all!**
+**One Go binary exports all the metrics for Prometheus**
 
-Code: github.com/kzrl/house
 
 -----
 
 ## Resources 📚
 
-**Official Docs:**
 .link https://prometheus.io/docs/instrumenting/writing_exporters/ Writing Exporters
 
-**Go Client Library:**
-.link https://github.com/prometheus/client_golang client_golang
-
-**Example Exporters:**
-.link https://github.com/prometheus/node_exporter Node Exporter
-.link https://github.com/prometheus/mysqld_exporter MySQL Exporter
+.link https://github.com/prometheus/client_golang Go client library
 
 ## Questions? 🤔
 
-@karlcordes
