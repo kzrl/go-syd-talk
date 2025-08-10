@@ -61,15 +61,16 @@ One Go binary polling all devices and exporting metrics on /metrics
 
 ## Why Go? 🚀
 
+Easy to deploy and run on anything I want to use as a server.
+
 ```bash
- cat deploy.sh
- #!/bin/bash
  GOOS=linux GOARCH=amd64 go build -o house cmd/main.go
  rsync -avz house k@server:~/bin/
  ssh k@server -t 'sudo systemctl restart house.service'
 ```
 
 Single binary - no runtime dependencies ❤️
+
 
 -----
 
