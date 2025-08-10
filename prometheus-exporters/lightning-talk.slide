@@ -1,0 +1,285 @@
+# How to Monitor your House with a Prometheus Exporter in Go
+
+21 Aug 2025
+Summary: Cool things
+
+Karl Cordes
+
+
+karl@cordes.com.au
+
+-----
+
+## What is Prometheus?
+
+**Pull-based monitoring system:**
+- Prometheus server scrapes targets at a specified interval
+- Targets expose metrics on `/metrics` endpoint
+- Simple text format
+
+
+## /metrics
+
+.code metrics.txt
+
+
+**Your exporter** = HTTP server that returns metrics
+
+-----
+
+## The Problem 
+
+I want to monitor:
+- Air quality sensors (Awair)
+- Air conditioner (Daikin)  
+- Solar panels (Fronius)
+- Weather station (Ecowitt)
+
+**Solution**: Write a custom Prometheus exporter!
+
+-----
+
+## What's a Prometheus Exporter?
+
+.image prometheus-flow.png
+
+A bridge that:
+- Collects metrics from a source
+- Translates to Prometheus format
+- Serves them on `/metrics` endpoint
+
+-----
+
+## Why Go? 🚀
+
+```bash
+$ ls -la cpu-exporter
+-rwxr-xr-x  1 karl  staff  7.2M  cpu-exporter
+
+$ scp cpu-exporter server:/usr/local/bin/
+$ ssh server 'cpu-exporter &'
+```
+
+✅ Single binary - no dependencies
+✅ Fast and lightweight  
+✅ Concurrent by design
+✅ Amazing Prometheus library
+
+-----
+
+## Prometheus Metric Types 📊
+
+**Counter** - Only goes up (resets on restart)
+```go
+http_requests_total
+errors_total
+```
+
+**Gauge** - Goes up and down
+```go
+temperature_celsius
+memory_usage_bytes
+concurrent_connections
+```
+
+**Histogram** - Buckets of observations
+```go
+http_request_duration_seconds
+```
+
+
+-----
+
+## Labelling Best Practices
+
+**DO:**
+```go
+// Good - bounded cardinality
+http_requests{method="GET", status="200"}
+temperature{location="bedroom", sensor="awair"}
+```
+
+**DON'T:**
+```go
+// Bad - unbounded cardinality!
+http_requests{user_id="12345"}  // Millions of users
+api_calls{session_id="abc123"}  // Unique per session
+```
+
+**Rule**: Labels should have <100 unique values per label
+
+-----
+
+## Real House Monitoring Code! 🏠
+
+```go
+// From house/awair/awair.go - Air quality monitor
+type Metrics struct {
+    Temp     *prometheus.GaugeVec  // Gauge: goes up/down
+    Humidity *prometheus.GaugeVec  // Gauge: 0-100%
+    CO2      *prometheus.GaugeVec  // Gauge: ppm varies
+    PM25     *prometheus.GaugeVec  // Gauge: particles
+}
+```
+
+Multiple devices, same metrics - use labels!
+
+-----
+
+## Creating Metrics with Labels
+
+```go
+// house/awair/awair.go
+m.Temp = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+    Namespace: "awair",
+    Name:      "temperature_celcius",
+    Help:      "Temperature",
+}, []string{"location"})  // Label for different rooms!
+
+m.CO2 = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+    Namespace: "awair",
+    Name:      "CO2",
+    Help:      "CO2 ppm",
+}, []string{"location"})
+```
+
+-----
+
+## Fetching from Devices
+
+```go
+// house/awair/awair.go - Real device API call
+func GetLiveData(hostname string) (LiveData, error) {
+    endpoint := fmt.Sprintf("http://%s/air-data/latest", hostname)
+    
+    resp, err := http.Get(endpoint)
+    if err != nil {
+        return LiveData{}, err
+    }
+    defer resp.Body.Close()
+    
+    var ld LiveData
+    json.NewDecoder(resp.Body).Decode(&ld)
+    return ld, nil
+}
+```
+
+-----
+
+## Update Metrics with Labels
+
+```go
+// house/awair/awair.go
+units := map[string]string{
+    "192.168.1.12": "bedroom",
+    "192.168.1.11": "office",
+}
+
+for ip, room := range units {
+    data, _ := GetLiveData(ip)
+    
+    m.Temp.With(prometheus.Labels{
+        "location": room
+    }).Set(data.Temp)
+    
+    m.CO2.With(prometheus.Labels{
+        "location": room
+    }).Set(float64(data.CO2))
+}
+
+-----
+
+## Wire It All Together! 🔌
+
+```go
+// house/cmd/main.go - Real production code!
+func main() {
+    // Create non-global registry
+    reg := prometheus.NewRegistry()
+    
+    // Register all home devices
+    awair := awair.NewMetrics(reg)
+    daikin := daikin.NewMetrics(reg)
+    fronius := fronius.NewMetrics(reg)
+    
+    // Poll devices concurrently
+    go awair.GetMetrics(*awair)
+    go daikin.GetMetrics(*daikin)
+    go fronius.GetMetrics(*fronius)
+    
+    http.Handle("/metrics", 
+        promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+-----
+
+## See Real Metrics! 🎯
+
+```bash
+$ curl localhost:8080/metrics | grep awair
+awair_temperature_celcius{location="bedroom"} 22.3
+awair_temperature_celcius{location="office"} 24.1
+awair_CO2{location="bedroom"} 412
+awair_CO2{location="office"} 523
+awair_PM25{location="bedroom"} 3
+awair_humidity{location="bedroom"} 65.2
+
+daikin_indoor_temp 23.5
+daikin_power 1  # AC is on!
+fronius_power_pv_watts 3420  # Solar generating!
+```
+
+-----
+
+## Polling Pattern 🔄
+
+```go
+// house/awair/awair.go
+func GetMetrics(m Metrics) {
+    for {
+        for ip, location := range devices {
+            data, err := GetLiveData(ip)
+            if err != nil {
+                log.Printf("error: %s\n", err)
+                continue  // Don't crash!
+            }
+            // Update metrics...
+        }
+        time.Sleep(1 * time.Minute)
+    }
+}
+```
+
+-----
+
+## A single pane of glass
+
+**My house runs this 24/7:**
+- Air quality
+- Solar panel production
+- Air conditioner status
+- Weather station data
+
+**One Go binary monitors it all!**
+
+Code: github.com/kzrl/house
+
+-----
+
+## Resources 📚
+
+**Official Docs:**
+.link https://prometheus.io/docs/instrumenting/writing_exporters/ Writing Exporters
+
+**Go Client Library:**
+.link https://github.com/prometheus/client_golang client_golang
+
+**Example Exporters:**
+.link https://github.com/prometheus/node_exporter Node Exporter
+.link https://github.com/prometheus/mysqld_exporter MySQL Exporter
+
+## Questions? 🤔
+
+@karlcordes
