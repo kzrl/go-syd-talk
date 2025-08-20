@@ -15,54 +15,9 @@ awair_VOC{location="bedroom"} 810
 # HELP awair_temperature_celcius Temperature
 # TYPE awair_temperature_celcius gauge
 awair_temperature_celcius{location="bedroom"} 19.34
-# HELP daikin_fan_rate Fan Rate
-# TYPE daikin_fan_rate gauge
-daikin_fan_rate 5
-# HELP daikin_indoor_temp Indoor Temperature
-# TYPE daikin_indoor_temp gauge
-daikin_indoor_temp 15
-# HELP daikin_mode Mode
-# TYPE daikin_mode gauge
-daikin_mode 2
-# HELP daikin_power Power
-# TYPE daikin_power gauge
-daikin_power 1
-# HELP daikin_set_temp Set Temperature
-# TYPE daikin_set_temp gauge
-daikin_set_temp 16
 # HELP ecowitt_dew_point_celcius Dew Point
 # TYPE ecowitt_dew_point_celcius gauge
 ecowitt_dew_point_celcius{location="bedroom"} 12.12
 ecowitt_dew_point_celcius{location="garage"} 12.73
 ecowitt_dew_point_celcius{location="outdoor"} 13.4
 ecowitt_dew_point_celcius{location="roofspace"} 12.43
-# HELP ecowitt_humidity Humidity
-# TYPE ecowitt_humidity gauge
-ecowitt_humidity{location="bedroom"} 73
-ecowitt_humidity{location="garage"} 88
-ecowitt_humidity{location="office"} 60
-ecowitt_humidity{location="outdoor"} 98
-ecowitt_humidity{location="roofspace"} 74
-# HELP ecowitt_solar_irradiance Solar irradiance W/m^2
-# TYPE ecowitt_solar_irradiance gauge
-ecowitt_solar_irradiance 37
-# HELP ecowitt_temperature_celcius Temperature
-# TYPE ecowitt_temperature_celcius gauge
-ecowitt_temperature_celcius{location="bedroom"} 17
-ecowitt_temperature_celcius{location="garage"} 14.7
-ecowitt_temperature_celcius{location="office"} 21.1
-ecowitt_temperature_celcius{location="outdoor"} 13.7
-ecowitt_temperature_celcius{location="roofspace"} 17.1
-# HELP ecowitt_temperature_feels_like_celcius Temperature feels like
-# TYPE ecowitt_temperature_feels_like_celcius gauge
-ecowitt_temperature_feels_like_celcius 13.7
-# HELP ecowitt_uv_index UV index
-# TYPE ecowitt_uv_index gauge
-ecowitt_uv_index 2
-# HELP ecowitt_wind_speed Wind speed m/s
-# TYPE ecowitt_wind_speed gauge
-ecowitt_wind_speed 0.7
-# HELP promhttp_metric_handler_errors_total Total number of internal errors encountered by the promhttp metric handler.
-# TYPE promhttp_metric_handler_errors_total counter
-promhttp_metric_handler_errors_total{cause="encoding"} 0
-promhttp_metric_handler_errors_total{cause="gathering"} 0

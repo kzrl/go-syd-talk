@@ -21,10 +21,6 @@ karl@cordes.com.au
 .code metrics.txt
 
 
-**Your exporter** = HTTP server that returns metrics
-
------
-
 ## The Problem 
 
 I want to monitor:
@@ -97,11 +93,12 @@ http_request_duration_seconds
 
 -----
 
-## Labelling Best Practices
+## Labels
 
 **DO:**
+Bounded cardinality
 ```go
-// Good - bounded cardinality
+
 http_requests{method="GET", status="200"}
 temperature{location="bedroom", sensor="awair"}
 ```
@@ -117,38 +114,48 @@ api_calls{session_id="abc123"}  // Unique per session
 
 -----
 
-## Real House Monitoring Code! 🏠
+## The Collector Interface 🎯
 
 ```go
-// From house/awair/awair.go - Air quality monitor
-type Metrics struct {
-    Temp     *prometheus.GaugeVec  // Gauge: goes up/down
-    Humidity *prometheus.GaugeVec  // Gauge: 0-100%
-    CO2      *prometheus.GaugeVec  // Gauge: ppm varies
-    PM25     *prometheus.GaugeVec  // Gauge: particles
+// Prometheus defines this interface
+type Collector interface {
+    // Describe sends metric descriptions
+    Describe(chan<- *prometheus.Desc)
+    
+    // Collect sends actual metric values
+    Collect(chan<- prometheus.Metric)
 }
 ```
 
-Multiple devices, same metrics - use labels!
+**Key insight**: Implement these 2 methods = instant exporter!
 
 -----
 
-## Creating Metrics with Labels
+## Real Implementation: Awair
 
 ```go
-// house/awair/awair.go
-m.Temp = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-    Namespace: "awair",
-    Name:      "temperature_celcius",
-    Help:      "Temperature",
-}, []string{"location"})  // Label for different rooms!
+// house/awair/collector.go
+type AwairCollector struct {
+    devices    map[string]string  // IP -> location
+    tempDesc   *prometheus.Desc
+    co2Desc    *prometheus.Desc
+    pm25Desc   *prometheus.Desc
+}
 
-m.CO2 = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-    Namespace: "awair",
-    Name:      "CO2",
-    Help:      "CO2 ppm",
-}, []string{"location"})
-```
+func (c *AwairCollector) Describe(ch chan<- *prometheus.Desc) {
+    ch <- c.tempDesc
+    ch <- c.co2Desc
+    ch <- c.pm25Desc
+}
+
+func (c *AwairCollector) Collect(ch chan<- prometheus.Metric) {
+    for ip, location := range c.devices {
+        data, _ := c.fetchLiveData(ip)
+        ch <- prometheus.MustNewConstMetric(
+            c.tempDesc, prometheus.GaugeValue, 
+            data.Temp, location)
+    }
+}
 
 -----
 
@@ -199,21 +206,17 @@ for ip, room := range units {
 ## Wire It All Together! 🔌
 
 ```go
-// house/cmd/main.go - Real production code!
+// house/cmd/main.go - Using the Collector pattern!
 func main() {
     // Create non-global registry
     reg := prometheus.NewRegistry()
     
-    // Register all home devices
-    awair := awair.NewMetrics(reg)
-    daikin := daikin.NewMetrics(reg)
-    fronius := fronius.NewMetrics(reg)
+    // Register collectors - they handle their own goroutines
+    reg.MustRegister(ecowitt.NewEcowittCollector())
+    reg.MustRegister(awair.NewAwairCollector())
+    reg.MustRegister(daikin.NewDaikinCollector())
     
-    // Poll devices concurrently
-    go awair.GetMetrics(*awair)
-    go daikin.GetMetrics(*daikin)
-    go fronius.GetMetrics(*fronius)
-    
+    // That's it! Prometheus calls Collect() on each scrape
     http.Handle("/metrics", 
         promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
     log.Fatal(http.ListenAndServe(":8080", nil))
@@ -240,24 +243,23 @@ fronius_power_pv_watts 3420  # Solar generating!
 
 -----
 
-## Polling Pattern 🔄
+## Collector Pattern Benefits ✨
 
 ```go
-// house/awair/awair.go
-func GetMetrics(m Metrics) {
-    for {
-        for ip, location := range devices {
-            data, err := GetLiveData(ip)
-            if err != nil {
-                log.Printf("error: %s\n", err)
-                continue  // Don't crash!
-            }
-            // Update metrics...
-        }
-        time.Sleep(1 * time.Minute)
-    }
-}
+// Old way: Polling in goroutines
+go awair.GetMetrics(*awair)  // Polls every minute
+go daikin.GetMetrics(*daikin)  // More goroutines...
+
+// New way: Collector interface
+reg.MustRegister(awair.NewAwairCollector())
+// Prometheus calls Collect() when it scrapes
 ```
+
+**Benefits:**
+- No polling loops or goroutines needed
+- Metrics always fresh when Prometheus scrapes
+- Built-in error handling with `up` metric
+- Follows Prometheus best practices
 
 -----
 
