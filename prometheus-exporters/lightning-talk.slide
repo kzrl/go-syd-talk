@@ -263,7 +263,7 @@ reg.MustRegister(awair.NewAwairCollector())
 
 -----
 
-## Weather Station
+## Weather Station polling
 
 ```go
 // house/ecowitt/ecowitt.go - Weather station with many sensors
@@ -297,7 +297,33 @@ func GetMetrics(m Metrics) {
 
 -----
 
-## A single pane of glass
+## Polling vs Collector Pattern 🔄
+
+**Polling Method (Old Way):**
+```go
+// Goroutines continuously poll devices
+go func() {
+    for {
+        data := fetchFromDevice()
+        metric.Set(data.Value)
+        time.Sleep(1 * time.Minute)  // Fixed interval
+    }
+}()
+```
+Problems: Resource waste, stale metrics, timing mismatches
+
+**Collector Pattern (Better):**
+```go
+func (c *MyCollector) Collect(ch chan<- prometheus.Metric) {
+    data := fetchFromDevice()  // Only when Prometheus scrapes
+    ch <- prometheus.MustNewConstMetric(desc, GaugeValue, data.Value)
+}
+```
+Benefits: On-demand, fresh data, resource efficient
+
+-----
+
+## A single pane of glass for the gadgets
 
 - Air quality
 - Solar panel production
